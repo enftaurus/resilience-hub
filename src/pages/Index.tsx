@@ -373,35 +373,58 @@ const createIcon = (color: string) =>
     popupAnchor: [0, -32],
   });
 
+const MOCK_MARKERS: MarkerData[] = [
+  { latitude: 17.385, longitude: 78.4867, priority: "high" },
+  { latitude: 17.44, longitude: 78.35, priority: "medium" },
+  { latitude: 17.35, longitude: 78.55, priority: "low" },
+  { latitude: 17.50, longitude: 78.40, priority: "high" },
+  { latitude: 17.30, longitude: 78.50, priority: "medium" },
+];
+
+const MOCK_REPORTS: ReportData[] = [
+  { report_url: "#", image_name: "flood_sector_7.jpg", timestamp: "2026-02-10 14:23:00" },
+  { report_url: "#", image_name: "bridge_collapse_A1.jpg", timestamp: "2026-02-10 13:10:00" },
+  { report_url: "#", image_name: "road_damage_NH65.jpg", timestamp: "2026-02-10 11:45:00" },
+];
+
 const DashboardSection = ({ onLogout }: DashboardSectionProps) => {
+  const [useMock, setUseMock] = useState(true);
   const [markers, setMarkers] = useState<MarkerData[]>([]);
   const [reports, setReports] = useState<ReportData[]>([]);
-  const [mapLoading, setMapLoading] = useState(true);
-  const [reportsLoading, setReportsLoading] = useState(true);
-  const [mapError, setMapError] = useState("");
+  const [reportsLoading, setReportsLoading] = useState(false);
   const [reportsError, setReportsError] = useState("");
 
   useEffect(() => {
-    /* Fetch markers */
+    if (useMock) {
+      setMarkers(MOCK_MARKERS);
+      setReports(MOCK_REPORTS);
+      setReportsError("");
+      return;
+    }
+
+    /* Fetch markers from backend */
     fetch("http://localhost:8000/dashboard")
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load markers");
         return res.json();
       })
       .then((data) => setMarkers(data))
-      .catch((err) => setMapError(err.message))
-      .finally(() => setMapLoading(false));
+      .catch(() => setMarkers([]));
 
-    /* Fetch reports */
+    /* Fetch reports from backend */
+    setReportsLoading(true);
     fetch("http://localhost:8000/reports")
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load reports");
         return res.json();
       })
       .then((data) => setReports(data))
-      .catch((err) => setReportsError(err.message))
+      .catch((err) => {
+        setReportsError(err.message);
+        setReports([]);
+      })
       .finally(() => setReportsLoading(false));
-  }, []);
+  }, [useMock]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -412,6 +435,17 @@ const DashboardSection = ({ onLogout }: DashboardSectionProps) => {
           <span className="font-mono text-sm uppercase tracking-widest text-muted-foreground">
             Command Dashboard
           </span>
+          {/* Mock Data Toggle */}
+          <button
+            onClick={() => setUseMock(!useMock)}
+            className={`ml-4 rounded-md border px-3 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors ${
+              useMock
+                ? "border-success/50 bg-success/10 text-success"
+                : "border-border text-muted-foreground hover:border-foreground"
+            }`}
+          >
+            Mock Data: {useMock ? "ON" : "OFF"}
+          </button>
         </div>
         <button
           onClick={onLogout}
@@ -425,48 +459,38 @@ const DashboardSection = ({ onLogout }: DashboardSectionProps) => {
       <main className="flex flex-1 flex-col lg:flex-row">
         {/* Map Panel */}
         <div className="flex-1 relative min-h-[400px]">
-          {mapLoading ? (
-            <div className="flex h-full items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : mapError ? (
-            <div className="flex h-full items-center justify-center p-6">
-              <p className="font-mono text-xs text-primary">{mapError}</p>
-            </div>
-          ) : (
-            <MapContainer
-              center={[20.5937, 78.9629]}
-              zoom={5}
-              className="h-full w-full min-h-[400px]"
-              style={{ background: "hsl(220, 25%, 8%)" }}
-            >
-              <TileLayer
-                attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-              />
-              {markers.map((m, i) => (
-                <Marker
-                  key={i}
-                  position={[m.latitude, m.longitude]}
-                  icon={createIcon(PRIORITY_COLORS[m.priority] || PRIORITY_COLORS.low)}
-                >
-                  <Popup>
-                    <span
-                      style={{
-                        fontFamily: "JetBrains Mono, monospace",
-                        fontSize: 12,
-                        textTransform: "uppercase",
-                        color: PRIORITY_COLORS[m.priority],
-                        fontWeight: 600,
-                      }}
-                    >
-                      {m.priority} priority
-                    </span>
-                  </Popup>
-                </Marker>
-              ))}
-            </MapContainer>
-          )}
+          <MapContainer
+            center={[17.385, 78.4867]}
+            zoom={12}
+            className="h-full w-full min-h-[400px]"
+            style={{ background: "hsl(220, 25%, 8%)" }}
+          >
+            <TileLayer
+              attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            />
+            {markers.map((m, i) => (
+              <Marker
+                key={i}
+                position={[m.latitude, m.longitude]}
+                icon={createIcon(PRIORITY_COLORS[m.priority] || PRIORITY_COLORS.low)}
+              >
+                <Popup>
+                  <span
+                    style={{
+                      fontFamily: "JetBrains Mono, monospace",
+                      fontSize: 12,
+                      textTransform: "uppercase",
+                      color: PRIORITY_COLORS[m.priority],
+                      fontWeight: 600,
+                    }}
+                  >
+                    {m.priority} priority
+                  </span>
+                </Popup>
+              </Marker>
+            ))}
+          </MapContainer>
 
           {/* Legend */}
           <div className="absolute bottom-4 left-4 z-[1000] flex gap-3 rounded-md border border-border bg-card/90 px-4 py-2 backdrop-blur-sm">
