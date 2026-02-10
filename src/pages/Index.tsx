@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Shield, Radio, Eye, Lock } from "lucide-react";
+import { Shield, Radio, Eye, EyeOff, Lock } from "lucide-react";
 
 type Section = "volunteer" | "dashboard" | null;
 
@@ -17,6 +17,7 @@ const PASSWORDS: Record<string, string> = {
 const PasswordGate = ({ section, onBack, onSuccess }: PasswordGateProps) => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   if (!section) return null;
 
@@ -40,17 +41,26 @@ const PasswordGate = ({ section, onBack, onSuccess }: PasswordGateProps) => {
       </div>
 
       <form onSubmit={handleSubmit} className="flex w-full max-w-sm flex-col gap-4">
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => {
-            setPassword(e.target.value);
-            setError("");
-          }}
-          placeholder="Enter access code..."
-          className="w-full rounded-md border border-border bg-secondary px-4 py-3 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          autoFocus
-        />
+        <div className="relative">
+          <input
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setError("");
+            }}
+            placeholder="Enter access code..."
+            className="w-full rounded-md border border-border bg-secondary px-4 py-3 pr-10 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            autoFocus
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
 
         {error && (
           <p className="font-mono text-xs text-primary animate-fade-in">{error}</p>
