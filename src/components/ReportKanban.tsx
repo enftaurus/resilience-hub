@@ -95,18 +95,18 @@ const ReportKanban = ({ reports }: ReportKanbanProps) => {
   };
 
   return (
-    <div className="flex flex-col gap-3 p-4 h-[calc(100vh-130px)] overflow-y-auto">
+    <div className="flex flex-1 gap-3 p-4 overflow-x-auto h-[calc(60vh-90px)]">
       {COLUMNS.map((status) => {
         const config = STATUS_CONFIG[status];
         const items = board[status];
         const isOver = dragOver === status;
 
         return (
-          <div key={status} className="flex flex-col gap-2">
+          <div key={status} className="flex flex-1 min-w-[200px] flex-col gap-2">
             {/* Column Header */}
             <div className={`flex items-center gap-2 rounded-md border ${config.border} ${config.bg} px-3 py-2`}>
               <span className={`h-2 w-2 rounded-full ${config.color === "text-primary" ? "bg-primary" : config.color === "text-accent" ? "bg-accent" : "bg-success"}`} />
-              <span className={`font-mono text-xs uppercase tracking-widest ${config.color}`}>
+              <span className={`font-mono text-[10px] uppercase tracking-widest ${config.color}`}>
                 {config.label}
               </span>
               <span className="ml-auto font-mono text-[10px] text-muted-foreground">
@@ -119,13 +119,13 @@ const ReportKanban = ({ reports }: ReportKanbanProps) => {
               onDragOver={(e) => handleDragOver(e, status)}
               onDragLeave={handleDragLeave}
               onDrop={() => handleDrop(status)}
-              className={`min-h-[60px] rounded-md border border-dashed transition-colors ${
+              className={`flex-1 overflow-y-auto rounded-md border border-dashed transition-colors ${
                 isOver ? `${config.border} ${config.bg}` : "border-border/50"
               }`}
             >
               {items.length === 0 ? (
                 <p className="py-4 text-center font-mono text-[10px] text-muted-foreground/50">
-                  Drop reports here
+                  Drop here
                 </p>
               ) : (
                 <div className="flex flex-col gap-2 p-2">
@@ -134,23 +134,23 @@ const ReportKanban = ({ reports }: ReportKanbanProps) => {
                       key={r.id}
                       draggable
                       onDragStart={() => handleDragStart(status, i)}
-                      className="flex items-center gap-3 rounded-md border border-border bg-card p-3 cursor-grab transition-all hover:border-muted-foreground/30 active:cursor-grabbing animate-fade-in"
+                      className="flex items-start gap-2 rounded-md border border-border bg-card p-2.5 cursor-grab transition-all hover:border-muted-foreground/30 active:cursor-grabbing animate-fade-in"
                     >
-                      <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
-                      <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
-                        <span className="truncate text-sm font-medium text-foreground">
+                      <GripVertical className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
+                      <div className="flex flex-1 flex-col gap-1 overflow-hidden">
+                        <span className="truncate text-xs font-medium text-foreground">
                           {r.image_name}
                         </span>
-                        <span className="font-mono text-[10px] text-muted-foreground">
+                        <span className="font-mono text-[9px] text-muted-foreground">
                           {r.timestamp}
                         </span>
+                        <button
+                          onClick={() => window.open(r.report_url, "_blank")}
+                          className="mt-1 self-start rounded border border-border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-accent transition-colors hover:border-accent hover:bg-accent/10"
+                        >
+                          View
+                        </button>
                       </div>
-                      <button
-                        onClick={() => window.open(r.report_url, "_blank")}
-                        className="shrink-0 rounded-md border border-border px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-accent transition-colors hover:border-accent hover:bg-accent/10"
-                      >
-                        View
-                      </button>
                     </div>
                   ))}
                 </div>

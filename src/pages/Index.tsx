@@ -479,13 +479,13 @@ const DashboardSection = ({ onLogout }: DashboardSectionProps) => {
         </button>
       </header>
 
-      <main className="flex flex-1 flex-col lg:flex-row">
-        {/* Map Panel */}
-        <div className="flex-1 relative min-h-[400px]">
+      <main className="flex flex-1 flex-col overflow-hidden">
+        {/* Map Panel — reduced height */}
+        <div className="relative h-[40vh] min-h-[250px]">
           <MapContainer
             center={[17.385, 78.4867]}
             zoom={12}
-            className="h-full w-full min-h-[400px]"
+            className="h-full w-full"
             style={{ background: "hsl(220, 25%, 8%)" }}
           >
             <TileLayer
@@ -498,7 +498,7 @@ const DashboardSection = ({ onLogout }: DashboardSectionProps) => {
                 position={[m.latitude, m.longitude]}
                 icon={createIcon(PRIORITY_COLORS[m.priority] || PRIORITY_COLORS.low)}
               >
-              <Popup>
+                <Popup>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 140 }}>
                     <span
                       style={{
@@ -550,9 +550,9 @@ const DashboardSection = ({ onLogout }: DashboardSectionProps) => {
           </div>
         </div>
 
-        {/* Reports Panel */}
-        <div className="w-full border-t border-border lg:w-96 lg:border-l lg:border-t-0">
-          <div className="flex items-center gap-2 border-b border-border px-6 py-4">
+        {/* Reports Kanban — 3 vertical columns */}
+        <div className="border-t border-border flex-1 overflow-hidden">
+          <div className="flex items-center gap-2 border-b border-border px-6 py-3">
             <FileText className="h-4 w-4 text-accent" />
             <h2 className="font-mono text-sm uppercase tracking-widest text-muted-foreground">
               Reports
