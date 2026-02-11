@@ -95,7 +95,7 @@ const ReportKanban = ({ reports }: ReportKanbanProps) => {
   };
 
   return (
-    <div className="flex flex-1 gap-3 p-4 overflow-x-auto h-[calc(60vh-90px)]">
+    <div className="flex flex-1 gap-3 p-3 overflow-hidden">
       {COLUMNS.map((status) => {
         const config = STATUS_CONFIG[status];
         const items = board[status];
