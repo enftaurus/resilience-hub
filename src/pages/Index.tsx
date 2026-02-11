@@ -353,7 +353,8 @@ const VolunteerSection = ({ onLogout }: VolunteerSectionProps) => {
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { FileText } from "lucide-react";
+import { FileText, Navigation } from "lucide-react";
+import ReportKanban, { type ReportData } from "@/components/ReportKanban";
 
 interface DashboardSectionProps {
   onLogout: () => void;
@@ -365,7 +366,7 @@ interface MarkerData {
   priority: "high" | "medium" | "low";
 }
 
-interface ReportData {
+interface LegacyReportData {
   report_url: string;
   image_name: string;
   timestamp: string;
@@ -396,15 +397,18 @@ const MOCK_MARKERS: MarkerData[] = [
 ];
 
 const MOCK_REPORTS: ReportData[] = [
-  { report_url: "#", image_name: "flood_sector_7.jpg", timestamp: "2026-02-10 14:23:00" },
-  { report_url: "#", image_name: "bridge_collapse_A1.jpg", timestamp: "2026-02-10 13:10:00" },
-  { report_url: "#", image_name: "road_damage_NH65.jpg", timestamp: "2026-02-10 11:45:00" },
+  { id: "r1", report_url: "#", image_name: "flood_sector_7.jpg", timestamp: "2026-02-10 14:23:00" },
+  { id: "r2", report_url: "#", image_name: "bridge_collapse_A1.jpg", timestamp: "2026-02-10 13:10:00" },
+  { id: "r3", report_url: "#", image_name: "road_damage_NH65.jpg", timestamp: "2026-02-10 11:45:00" },
+  { id: "r4", report_url: "#", image_name: "power_line_down_S3.jpg", timestamp: "2026-02-10 10:30:00" },
+  { id: "r5", report_url: "#", image_name: "building_crack_B12.jpg", timestamp: "2026-02-10 09:15:00" },
 ];
 
 const DashboardSection = ({ onLogout }: DashboardSectionProps) => {
   const [useMock, setUseMock] = useState(true);
   const [markers, setMarkers] = useState<MarkerData[]>([]);
   const [reports, setReports] = useState<ReportData[]>([]);
+  const [reportsKey, setReportsKey] = useState(0);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportsError, setReportsError] = useState("");
 
@@ -412,6 +416,7 @@ const DashboardSection = ({ onLogout }: DashboardSectionProps) => {
     if (useMock) {
       setMarkers(MOCK_MARKERS);
       setReports(MOCK_REPORTS);
+      setReportsKey((k) => k + 1);
       setReportsError("");
       return;
     }
@@ -432,7 +437,11 @@ const DashboardSection = ({ onLogout }: DashboardSectionProps) => {
         if (!res.ok) throw new Error("Failed to load reports");
         return res.json();
       })
-      .then((data) => setReports(data))
+      .then((data: LegacyReportData[]) => {
+        const withIds = data.map((r, i) => ({ ...r, id: `api-${i}` }));
+        setReports(withIds);
+        setReportsKey((k) => k + 1);
+      })
       .catch((err) => {
         setReportsError(err.message);
         setReports([]);
@@ -489,18 +498,37 @@ const DashboardSection = ({ onLogout }: DashboardSectionProps) => {
                 position={[m.latitude, m.longitude]}
                 icon={createIcon(PRIORITY_COLORS[m.priority] || PRIORITY_COLORS.low)}
               >
-                <Popup>
-                  <span
-                    style={{
-                      fontFamily: "JetBrains Mono, monospace",
-                      fontSize: 12,
-                      textTransform: "uppercase",
-                      color: PRIORITY_COLORS[m.priority],
-                      fontWeight: 600,
-                    }}
-                  >
-                    {m.priority} priority
-                  </span>
+              <Popup>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 140 }}>
+                    <span
+                      style={{
+                        fontFamily: "JetBrains Mono, monospace",
+                        fontSize: 12,
+                        textTransform: "uppercase",
+                        color: PRIORITY_COLORS[m.priority],
+                        fontWeight: 600,
+                      }}
+                    >
+                      {m.priority} priority
+                    </span>
+                    <a
+                      href={`https://www.google.com/maps/dir/?api=1&destination=${m.latitude},${m.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        fontFamily: "JetBrains Mono, monospace",
+                        fontSize: 11,
+                        color: "#3b82f6",
+                        textDecoration: "none",
+                        fontWeight: 500,
+                      }}
+                    >
+                      📍 Get Directions
+                    </a>
+                  </div>
                 </Popup>
               </Marker>
             ))}
@@ -531,46 +559,21 @@ const DashboardSection = ({ onLogout }: DashboardSectionProps) => {
             </h2>
           </div>
 
-          <div className="h-[calc(100vh-130px)] overflow-y-auto p-4">
-            {reportsLoading ? (
-              <div className="flex items-center justify-center py-10">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : reportsError ? (
-              <p className="py-4 text-center font-mono text-xs text-primary">
-                {reportsError}
-              </p>
-            ) : reports.length === 0 ? (
-              <p className="py-4 text-center font-mono text-xs text-muted-foreground">
-                No reports available
-              </p>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {reports.map((r, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between rounded-md border border-border bg-card p-4 transition-colors hover:border-accent/50 animate-fade-in"
-                    style={{ animationDelay: `${i * 50}ms` }}
-                  >
-                    <div className="flex flex-col gap-1">
-                      <span className="text-sm font-medium text-foreground">
-                        {r.image_name}
-                      </span>
-                      <span className="font-mono text-[10px] text-muted-foreground">
-                        {r.timestamp}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => window.open(r.report_url, "_blank")}
-                      className="rounded-md border border-border px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-accent transition-colors hover:border-accent hover:bg-accent/10"
-                    >
-                      View
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          {reportsLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : reportsError ? (
+            <p className="py-4 text-center font-mono text-xs text-primary">
+              {reportsError}
+            </p>
+          ) : reports.length === 0 ? (
+            <p className="py-4 text-center font-mono text-xs text-muted-foreground">
+              No reports available
+            </p>
+          ) : (
+            <ReportKanban key={reportsKey} reports={reports} />
+          )}
         </div>
       </main>
     </div>
