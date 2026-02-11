@@ -227,7 +227,11 @@ const VolunteerSection = ({ onLogout }: VolunteerSectionProps) => {
       const data = await res.json();
 
       if (data.report_url) {
-        window.open(data.report_url, "_blank");
+        const newTab = window.open(data.report_url, "_blank", "noopener,noreferrer");
+        if (!newTab) {
+          // Fallback if the browser blocks the popup.
+          window.location.href = data.report_url;
+        }
         setStatus({ type: "success", msg: "Report generated — opened in new tab." });
       } else {
         throw new Error("No report URL returned.");
