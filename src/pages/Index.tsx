@@ -479,9 +479,9 @@ const DashboardSection = ({ onLogout }: DashboardSectionProps) => {
         </button>
       </header>
 
-      <main className="flex flex-1 flex-col overflow-hidden">
-        {/* Map Panel — reduced height */}
-        <div className="relative h-[40vh] min-h-[250px]">
+      <main className="flex flex-1 overflow-hidden">
+        {/* Map Panel — full height, left side */}
+        <div className="relative w-1/2 min-w-[300px]">
           <MapContainer
             center={[17.385, 78.4867]}
             zoom={12}
@@ -550,9 +550,9 @@ const DashboardSection = ({ onLogout }: DashboardSectionProps) => {
           </div>
         </div>
 
-        {/* Reports Kanban — 3 vertical columns */}
-        <div className="border-t border-border flex-1 overflow-hidden">
-          <div className="flex items-center gap-2 border-b border-border px-6 py-3">
+        {/* Reports Kanban — right side, 3 vertical columns */}
+        <div className="flex flex-1 flex-col border-l border-border overflow-hidden">
+          <div className="flex items-center gap-2 border-b border-border px-4 py-3">
             <FileText className="h-4 w-4 text-accent" />
             <h2 className="font-mono text-sm uppercase tracking-widest text-muted-foreground">
               Reports
