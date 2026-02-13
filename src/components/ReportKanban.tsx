@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FileText, GripVertical } from "lucide-react";
 
 export interface ReportData {
@@ -10,8 +10,12 @@ export interface ReportData {
 
 export type KanbanStatus = "pending" | "in_progress" | "completed";
 
+export type KanbanBoard = Record<KanbanStatus, ReportData[]>;
+
 interface ReportKanbanProps {
-  reports: ReportData[];
+  initialBoard: KanbanBoard;
+  readOnly?: boolean;
+  className?: string;
 }
 
 const STATUS_CONFIG: Record<KanbanStatus, { label: string; color: string; bg: string; border: string }> = {
@@ -37,28 +41,24 @@ const STATUS_CONFIG: Record<KanbanStatus, { label: string; color: string; bg: st
 
 const COLUMNS: KanbanStatus[] = ["pending", "in_progress", "completed"];
 
-const ReportKanban = ({ reports }: ReportKanbanProps) => {
+const ReportKanban = ({ initialBoard, readOnly, className }: ReportKanbanProps) => {
   const [board, setBoard] = useState<Record<KanbanStatus, ReportData[]>>(() => ({
-    pending: reports,
-    in_progress: [],
-    completed: [],
+    pending: initialBoard.pending ?? [],
+    in_progress: initialBoard.in_progress ?? [],
+    completed: initialBoard.completed ?? [],
   }));
 
   const [dragItem, setDragItem] = useState<{ status: KanbanStatus; index: number } | null>(null);
   const [dragOver, setDragOver] = useState<KanbanStatus | null>(null);
 
-  // Sync if reports prop changes
-  useState(() => {
-    setBoard((prev) => {
-      const existingIds = new Set([
-        ...prev.pending.map((r) => r.id),
-        ...prev.in_progress.map((r) => r.id),
-        ...prev.completed.map((r) => r.id),
-      ]);
-      const newReports = reports.filter((r) => !existingIds.has(r.id));
-      return { ...prev, pending: [...prev.pending, ...newReports] };
+  // Sync if initialBoard prop changes
+  useEffect(() => {
+    setBoard({
+      pending: initialBoard.pending ?? [],
+      in_progress: initialBoard.in_progress ?? [],
+      completed: initialBoard.completed ?? [],
     });
-  });
+  }, [initialBoard]);
 
   const handleDragStart = (status: KanbanStatus, index: number) => {
     setDragItem({ status, index });
@@ -95,7 +95,7 @@ const ReportKanban = ({ reports }: ReportKanbanProps) => {
   };
 
   return (
-    <div className="flex flex-1 gap-3 p-3 overflow-hidden">
+    <div className={`flex flex-1 gap-3 p-3 overflow-hidden ${className ?? ""}`}>
       {COLUMNS.map((status) => {
         const config = STATUS_CONFIG[status];
         const items = board[status];
