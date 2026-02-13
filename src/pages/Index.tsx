@@ -392,6 +392,7 @@ interface MapPoint {
   latitude: number;
   longitude: number;
   flag: string;
+  upvotes?: number;
 }
 
 interface DashboardCard {
@@ -400,6 +401,7 @@ interface DashboardCard {
   latitude: number;
   longitude: number;
   flag: string;
+  upvotes?: number;
   image_url: string | null;
   report_url: string | null;
   created_at: string;
@@ -427,11 +429,11 @@ const createIcon = (color: string) =>
   });
 
 const MOCK_MARKERS: MapPoint[] = [
-  { id: "m1", latitude: 17.385, longitude: 78.4867, flag: "high" },
-  { id: "m2", latitude: 17.44, longitude: 78.35, flag: "medium" },
-  { id: "m3", latitude: 17.35, longitude: 78.55, flag: "low" },
-  { id: "m4", latitude: 17.5, longitude: 78.4, flag: "high" },
-  { id: "m5", latitude: 17.3, longitude: 78.5, flag: "medium" },
+  { id: "m1", latitude: 17.385, longitude: 78.4867, flag: "high", upvotes: 15 },
+  { id: "m2", latitude: 17.44, longitude: 78.35, flag: "medium", upvotes: 5 },
+  { id: "m3", latitude: 17.35, longitude: 78.55, flag: "low", upvotes: 2 },
+  { id: "m4", latitude: 17.5, longitude: 78.4, flag: "high", upvotes: 12 },
+  { id: "m5", latitude: 17.3, longitude: 78.5, flag: "medium", upvotes: 8 },
 ];
 
 const MOCK_REPORTS: ReportData[] = [
@@ -442,20 +444,45 @@ const MOCK_REPORTS: ReportData[] = [
   { id: "r5", report_url: "#", image_name: "building_crack_B12.jpg", timestamp: "2026-02-10 09:15:00" },
 ];
 
+function normalizeMapPoint(row: { id?: unknown; latitude: number; longitude: number; flag: string; upvotes?: unknown }): MapPoint {
+  return {
+    id: String(row.id ?? ""),
+    latitude: Number(row.latitude),
+    longitude: Number(row.longitude),
+    flag: String(row.flag ?? "low"),
+    upvotes: row.upvotes != null ? Number(row.upvotes) : undefined,
+  };
+}
+
+function normalizeCard(row: Record<string, unknown>): DashboardCard {
+  return {
+    id: String(row.id ?? ""),
+    name: String(row.name ?? ""),
+    latitude: Number(row.latitude),
+    longitude: Number(row.longitude),
+    flag: String(row.flag ?? "low"),
+    upvotes: row.upvotes != null ? Number(row.upvotes) : undefined,
+    image_url: row.image_url != null ? String(row.image_url) : null,
+    report_url: row.report_url != null ? String(row.report_url) : null,
+    created_at: row.created_at != null ? String(row.created_at) : "",
+  };
+}
+
 function cardToReport(c: DashboardCard): ReportData {
   return {
     id: String(c.id),
     report_url: c.report_url ?? "#",
     image_name: c.name,
     timestamp: c.created_at,
+    upvotes: c.upvotes ?? 0,
   };
 }
 
 function buildKanbanBoard(kanban: DashboardResponse["kanban"]): KanbanBoard {
   return {
-    pending: (kanban.pending ?? []).map(cardToReport),
-    in_progress: (kanban.in_progress ?? []).map(cardToReport),
-    completed: (kanban.completed ?? []).map(cardToReport),
+    pending: (kanban.pending ?? []).map((r) => cardToReport(normalizeCard(r as unknown as Record<string, unknown>))),
+    in_progress: (kanban.in_progress ?? []).map((r) => cardToReport(normalizeCard(r as unknown as Record<string, unknown>))),
+    completed: (kanban.completed ?? []).map((r) => cardToReport(normalizeCard(r as unknown as Record<string, unknown>))),
   };
 }
 
@@ -493,7 +520,7 @@ const DashboardSection = ({ onLogout }: DashboardSectionProps) => {
       })
       .then((data: DashboardResponse) => {
         const kanban = data.kanban ?? { pending: [], in_progress: [], completed: [] };
-        setMapPoints(data.map_points ?? []);
+        setMapPoints((data.map_points ?? []).map(normalizeMapPoint));
         setKanbanBoard(buildKanbanBoard(kanban));
         setReportsKey((k) => k + 1);
       })
@@ -557,17 +584,46 @@ const DashboardSection = ({ onLogout }: DashboardSectionProps) => {
                   >
                     <Popup>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 140 }}>
-                        <span
-                          style={{
-                            fontFamily: "JetBrains Mono, monospace",
-                            fontSize: 12,
-                            textTransform: "uppercase",
-                            color: PRIORITY_COLORS[m.flag] ?? PRIORITY_COLORS.low,
-                            fontWeight: 600,
-                          }}
-                        >
-                          {m.flag}
-                        </span>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                          <span
+                            style={{
+                              fontFamily: "JetBrains Mono, monospace",
+                              fontSize: 12,
+                              textTransform: "uppercase",
+                              color: PRIORITY_COLORS[m.flag] ?? PRIORITY_COLORS.low,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {m.flag}
+                          </span>
+                          {m.upvotes != null && (
+                            <span
+                              style={{
+                                fontFamily: "JetBrains Mono, monospace",
+                                fontSize: 10,
+                                color: m.upvotes > 10 ? PRIORITY_COLORS.high : "#9ca3af",
+                                fontWeight: 600,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                            >
+                              ⬆️ {m.upvotes}
+                            </span>
+                          )}
+                        </div>
+                        {m.upvotes != null && m.upvotes > 10 && (
+                          <span
+                            style={{
+                              fontFamily: "JetBrains Mono, monospace",
+                              fontSize: 9,
+                              color: PRIORITY_COLORS.high,
+                              fontStyle: "italic",
+                            }}
+                          >
+                            Auto-escalated (upvotes &gt; 10)
+                          </span>
+                        )}
                         <a
                           href={`https://www.google.com/maps/dir/?api=1&destination=${m.latitude},${m.longitude}`}
                           target="_blank"
@@ -597,17 +653,46 @@ const DashboardSection = ({ onLogout }: DashboardSectionProps) => {
                   >
                     <Popup>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 140 }}>
-                        <span
-                          style={{
-                            fontFamily: "JetBrains Mono, monospace",
-                            fontSize: 12,
-                            textTransform: "uppercase",
-                            color: PRIORITY_COLORS[m.flag] ?? PRIORITY_COLORS.low,
-                            fontWeight: 600,
-                          }}
-                        >
-                          {m.flag}
-                        </span>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                          <span
+                            style={{
+                              fontFamily: "JetBrains Mono, monospace",
+                              fontSize: 12,
+                              textTransform: "uppercase",
+                              color: PRIORITY_COLORS[m.flag] ?? PRIORITY_COLORS.low,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {m.flag}
+                          </span>
+                          {m.upvotes != null && (
+                            <span
+                              style={{
+                                fontFamily: "JetBrains Mono, monospace",
+                                fontSize: 10,
+                                color: m.upvotes > 10 ? PRIORITY_COLORS.high : "#9ca3af",
+                                fontWeight: 600,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                            >
+                              ⬆️ {m.upvotes}
+                            </span>
+                          )}
+                        </div>
+                        {m.upvotes != null && m.upvotes > 10 && (
+                          <span
+                            style={{
+                              fontFamily: "JetBrains Mono, monospace",
+                              fontSize: 9,
+                              color: PRIORITY_COLORS.high,
+                              fontStyle: "italic",
+                            }}
+                          >
+                            Auto-escalated (upvotes &gt; 10)
+                          </span>
+                        )}
                         <a
                           href={`https://www.google.com/maps/dir/?api=1&destination=${m.latitude},${m.longitude}`}
                           target="_blank"

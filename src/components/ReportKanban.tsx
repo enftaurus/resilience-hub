@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { FileText, GripVertical } from "lucide-react";
 
 export interface ReportData {
@@ -6,6 +6,7 @@ export interface ReportData {
   report_url: string;
   image_name: string;
   timestamp: string;
+  upvotes?: number;
 }
 
 export type KanbanStatus = "pending" | "in_progress" | "completed";
@@ -13,7 +14,9 @@ export type KanbanStatus = "pending" | "in_progress" | "completed";
 export type KanbanBoard = Record<KanbanStatus, ReportData[]>;
 
 interface ReportKanbanProps {
-  initialBoard: KanbanBoard;
+  reports?: ReportData[];
+  /** Pre-grouped columns from API (overrides reports when provided) */
+  initialBoard?: KanbanBoard;
   readOnly?: boolean;
   className?: string;
 }
@@ -41,30 +44,52 @@ const STATUS_CONFIG: Record<KanbanStatus, { label: string; color: string; bg: st
 
 const COLUMNS: KanbanStatus[] = ["pending", "in_progress", "completed"];
 
-const ReportKanban = ({ initialBoard, readOnly, className }: ReportKanbanProps) => {
-  const [board, setBoard] = useState<Record<KanbanStatus, ReportData[]>>(() => ({
-    pending: initialBoard.pending ?? [],
-    in_progress: initialBoard.in_progress ?? [],
-    completed: initialBoard.completed ?? [],
-  }));
+const ReportKanban = ({ reports = [], initialBoard, readOnly = false, className }: ReportKanbanProps) => {
+  const [board, setBoard] = useState<Record<KanbanStatus, ReportData[]>>(() =>
+    initialBoard
+      ? {
+          pending: initialBoard.pending ?? [],
+          in_progress: initialBoard.in_progress ?? [],
+          completed: initialBoard.completed ?? [],
+        }
+      : {
+          pending: reports,
+          in_progress: [],
+          completed: [],
+        }
+  );
 
   const [dragItem, setDragItem] = useState<{ status: KanbanStatus; index: number } | null>(null);
   const [dragOver, setDragOver] = useState<KanbanStatus | null>(null);
 
-  // Sync if initialBoard prop changes
+  // Sync when initialBoard or reports change
   useEffect(() => {
-    setBoard({
-      pending: initialBoard.pending ?? [],
-      in_progress: initialBoard.in_progress ?? [],
-      completed: initialBoard.completed ?? [],
+    if (initialBoard) {
+      setBoard({
+        pending: initialBoard.pending ?? [],
+        in_progress: initialBoard.in_progress ?? [],
+        completed: initialBoard.completed ?? [],
+      });
+      return;
+    }
+    setBoard((prev) => {
+      const existingIds = new Set([
+        ...prev.pending.map((r) => r.id),
+        ...prev.in_progress.map((r) => r.id),
+        ...prev.completed.map((r) => r.id),
+      ]);
+      const newReports = reports.filter((r) => !existingIds.has(r.id));
+      return { ...prev, pending: [...prev.pending, ...newReports] };
     });
-  }, [initialBoard]);
+  }, [initialBoard, reports]);
 
   const handleDragStart = (status: KanbanStatus, index: number) => {
+    if (readOnly) return;
     setDragItem({ status, index });
   };
 
   const handleDragOver = (e: React.DragEvent, status: KanbanStatus) => {
+    if (readOnly) return;
     e.preventDefault();
     setDragOver(status);
   };
@@ -74,8 +99,15 @@ const ReportKanban = ({ initialBoard, readOnly, className }: ReportKanbanProps) 
   };
 
   const handleDrop = (targetStatus: KanbanStatus) => {
+    if (readOnly) return;
     if (!dragItem) return;
     const { status: sourceStatus, index } = dragItem;
+
+    if (targetStatus === "completed" && sourceStatus !== "in_progress") {
+      setDragItem(null);
+      setDragOver(null);
+      return;
+    }
 
     if (sourceStatus === targetStatus) {
       setDragItem(null);
@@ -94,15 +126,19 @@ const ReportKanban = ({ initialBoard, readOnly, className }: ReportKanbanProps) 
     setDragOver(null);
   };
 
+  const containerClass = className
+    ? `grid grid-cols-1 md:grid-cols-3 gap-3 p-3 w-full h-full ${className}`
+    : "grid grid-cols-1 md:grid-cols-3 gap-3 p-3 w-full h-full";
+
   return (
-    <div className={`flex flex-1 gap-3 p-3 overflow-hidden ${className ?? ""}`}>
+    <div className={containerClass}>
       {COLUMNS.map((status) => {
         const config = STATUS_CONFIG[status];
         const items = board[status];
         const isOver = dragOver === status;
 
         return (
-          <div key={status} className="flex flex-1 min-w-[200px] flex-col gap-2">
+          <div key={status} className="flex min-w-0 min-h-0 flex-col gap-2">
             {/* Column Header */}
             <div className={`flex items-center gap-2 rounded-md border ${config.border} ${config.bg} px-3 py-2`}>
               <span className={`h-2 w-2 rounded-full ${config.color === "text-primary" ? "bg-primary" : config.color === "text-accent" ? "bg-accent" : "bg-success"}`} />
@@ -119,31 +155,52 @@ const ReportKanban = ({ initialBoard, readOnly, className }: ReportKanbanProps) 
               onDragOver={(e) => handleDragOver(e, status)}
               onDragLeave={handleDragLeave}
               onDrop={() => handleDrop(status)}
-              className={`flex-1 overflow-y-auto rounded-md border border-dashed transition-colors ${
+              className={`flex-1 min-h-0 overflow-y-auto rounded-md border border-dashed transition-colors ${
                 isOver ? `${config.border} ${config.bg}` : "border-border/50"
               }`}
             >
               {items.length === 0 ? (
                 <p className="py-4 text-center font-mono text-[10px] text-muted-foreground/50">
-                  Drop here
+                  {readOnly ? "No items" : "Drop here"}
                 </p>
               ) : (
                 <div className="flex flex-col gap-2 p-2">
                   {items.map((r, i) => (
                     <div
                       key={r.id}
-                      draggable
+                      draggable={!readOnly}
                       onDragStart={() => handleDragStart(status, i)}
-                      className="flex items-start gap-2 rounded-md border border-border bg-card p-2.5 cursor-grab transition-all hover:border-muted-foreground/30 active:cursor-grabbing animate-fade-in"
+                      className={`flex items-start gap-2 rounded-md border border-border bg-card p-2.5 transition-all hover:border-muted-foreground/30 animate-fade-in ${
+                        readOnly ? "cursor-default" : "cursor-grab active:cursor-grabbing"
+                      }`}
                     >
-                      <GripVertical className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
+                      {!readOnly && (
+                        <GripVertical className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
+                      )}
                       <div className="flex flex-1 flex-col gap-1 overflow-hidden">
-                        <span className="truncate text-xs font-medium text-foreground">
-                          {r.image_name}
-                        </span>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate text-xs font-medium text-foreground">
+                            {r.image_name}
+                          </span>
+                          {r.upvotes != null && (
+                            <span
+                              className={`font-mono text-[9px] font-semibold ${
+                                r.upvotes > 10 ? "text-primary" : "text-muted-foreground"
+                              }`}
+                              title={r.upvotes > 10 ? "Auto-escalated (upvotes > 10)" : undefined}
+                            >
+                              ⬆️ {r.upvotes}
+                            </span>
+                          )}
+                        </div>
                         <span className="font-mono text-[9px] text-muted-foreground">
                           {r.timestamp}
                         </span>
+                        {r.upvotes != null && r.upvotes > 10 && (
+                          <span className="font-mono text-[8px] text-primary italic">
+                            Auto-escalated
+                          </span>
+                        )}
                         <button
                           onClick={() => window.open(r.report_url, "_blank")}
                           className="mt-1 self-start rounded border border-border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-accent transition-colors hover:border-accent hover:bg-accent/10"
