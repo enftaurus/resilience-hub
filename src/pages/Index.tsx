@@ -1,5 +1,9 @@
-import { useState } from "react";
-import { Shield, Radio, Eye, EyeOff, Lock } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Shield, Radio, Eye, EyeOff, Lock, Upload, MapPin, LogOut, Loader2, CheckCircle, AlertTriangle, FileText } from "lucide-react";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import ReportKanban, { type ReportData, type KanbanBoard } from "@/components/ReportKanban";
 
 type Section = "volunteer" | "dashboard" | null;
 
@@ -162,16 +166,16 @@ const Landing = () => {
 export default Landing;
 
 /* ─── Volunteer Section ─── */
-import { useEffect, useRef } from "react";
-import { Upload, MapPin, LogOut, Loader2, CheckCircle, AlertTriangle } from "lucide-react";
-
 interface VolunteerSectionProps {
   onLogout: () => void;
 }
 
+type PriorityFlag = "high" | "medium" | "low";
+
 const VolunteerSection = ({ onLogout }: VolunteerSectionProps) => {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [priority, setPriority] = useState<PriorityFlag>("medium");
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   const [geoError, setGeoError] = useState("");
@@ -216,6 +220,7 @@ const VolunteerSection = ({ onLogout }: VolunteerSectionProps) => {
       formData.append("file", file);
       formData.append("latitude", String(lat ?? 0));
       formData.append("longitude", String(lng ?? 0));
+      formData.append("flag", priority);
 
       const res = await fetch("http://localhost:8000/analysis", {
         method: "POST",
@@ -229,7 +234,6 @@ const VolunteerSection = ({ onLogout }: VolunteerSectionProps) => {
       if (data.report_url) {
         const newTab = window.open(data.report_url, "_blank", "noopener,noreferrer");
         if (!newTab) {
-          // Fallback if the browser blocks the popup.
           window.location.href = data.report_url;
         }
         setStatus({ type: "success", msg: "Report generated — opened in new tab." });
@@ -280,6 +284,33 @@ const VolunteerSection = ({ onLogout }: VolunteerSectionProps) => {
                 Acquiring location...
               </span>
             )}
+          </div>
+
+          {/* Priority: High / Medium / Low */}
+          <div className="flex flex-col gap-2">
+            <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              Priority
+            </span>
+            <div className="flex gap-2">
+              {(["high", "medium", "low"] as const).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPriority(p)}
+                  className={`flex-1 rounded-md border px-3 py-2.5 font-mono text-xs uppercase tracking-wider transition-colors ${
+                    priority === p
+                      ? p === "high"
+                        ? "border-primary bg-primary/20 text-primary"
+                        : p === "medium"
+                          ? "border-amber-500/60 bg-amber-500/20 text-amber-500"
+                          : "border-green-500/60 bg-green-500/20 text-green-600 dark:text-green-400"
+                      : "border-border bg-card text-muted-foreground hover:border-foreground hover:text-foreground"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Image Upload Area */}
@@ -349,27 +380,34 @@ const VolunteerSection = ({ onLogout }: VolunteerSectionProps) => {
   );
 };
 
-/* ─── Dashboard Section ─── */
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-import { FileText, Navigation } from "lucide-react";
-import ReportKanban, { type ReportData } from "@/components/ReportKanban";
+/* ─── Dashboard Section (Command Control) — GET /dashboard ─── */
+const DASHBOARD_API_URL = "http://localhost:8000/dashboard";
 
 interface DashboardSectionProps {
   onLogout: () => void;
 }
 
-interface MarkerData {
+interface MapPoint {
+  id: string;
   latitude: number;
   longitude: number;
-  priority: "high" | "medium" | "low";
+  flag: string;
 }
 
-interface LegacyReportData {
-  report_url: string;
-  image_name: string;
-  timestamp: string;
+interface DashboardCard {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  flag: string;
+  image_url: string | null;
+  report_url: string | null;
+  created_at: string;
+}
+
+interface DashboardResponse {
+  map_points: MapPoint[];
+  kanban: { pending: DashboardCard[]; in_progress: DashboardCard[]; completed: DashboardCard[] };
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -388,12 +426,12 @@ const createIcon = (color: string) =>
     popupAnchor: [0, -32],
   });
 
-const MOCK_MARKERS: MarkerData[] = [
-  { latitude: 17.385, longitude: 78.4867, priority: "high" },
-  { latitude: 17.44, longitude: 78.35, priority: "medium" },
-  { latitude: 17.35, longitude: 78.55, priority: "low" },
-  { latitude: 17.50, longitude: 78.40, priority: "high" },
-  { latitude: 17.30, longitude: 78.50, priority: "medium" },
+const MOCK_MARKERS: MapPoint[] = [
+  { id: "m1", latitude: 17.385, longitude: 78.4867, flag: "high" },
+  { id: "m2", latitude: 17.44, longitude: 78.35, flag: "medium" },
+  { id: "m3", latitude: 17.35, longitude: 78.55, flag: "low" },
+  { id: "m4", latitude: 17.5, longitude: 78.4, flag: "high" },
+  { id: "m5", latitude: 17.3, longitude: 78.5, flag: "medium" },
 ];
 
 const MOCK_REPORTS: ReportData[] = [
@@ -404,55 +442,73 @@ const MOCK_REPORTS: ReportData[] = [
   { id: "r5", report_url: "#", image_name: "building_crack_B12.jpg", timestamp: "2026-02-10 09:15:00" },
 ];
 
+function cardToReport(c: DashboardCard): ReportData {
+  return {
+    id: String(c.id),
+    report_url: c.report_url ?? "#",
+    image_name: c.name,
+    timestamp: c.created_at,
+  };
+}
+
+function buildKanbanBoard(kanban: DashboardResponse["kanban"]): KanbanBoard {
+  return {
+    pending: (kanban.pending ?? []).map(cardToReport),
+    in_progress: (kanban.in_progress ?? []).map(cardToReport),
+    completed: (kanban.completed ?? []).map(cardToReport),
+  };
+}
+
 const DashboardSection = ({ onLogout }: DashboardSectionProps) => {
-  const [useMock, setUseMock] = useState(true);
-  const [markers, setMarkers] = useState<MarkerData[]>([]);
-  const [reports, setReports] = useState<ReportData[]>([]);
+  const [useMock, setUseMock] = useState(false);
+  const [mapPoints, setMapPoints] = useState<MapPoint[]>([]);
+  const [kanbanBoard, setKanbanBoard] = useState<KanbanBoard>({
+    pending: [],
+    in_progress: [],
+    completed: []
+  });
   const [reportsKey, setReportsKey] = useState(0);
-  const [reportsLoading, setReportsLoading] = useState(false);
-  const [reportsError, setReportsError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (useMock) {
-      setMarkers(MOCK_MARKERS);
-      setReports(MOCK_REPORTS);
+      setMapPoints(MOCK_MARKERS);
+      setKanbanBoard({
+        pending: MOCK_REPORTS.slice(0, 2),
+        in_progress: MOCK_REPORTS.slice(2, 4),
+        completed: MOCK_REPORTS.slice(4)
+      });
       setReportsKey((k) => k + 1);
-      setReportsError("");
+      setError("");
       return;
     }
 
-    /* Fetch markers from backend */
-    fetch("http://localhost:8000/dashboard")
+    setLoading(true);
+    setError("");
+    fetch(DASHBOARD_API_URL)
       .then((res) => {
-        if (!res.ok) throw new Error("Failed to load markers");
+        if (!res.ok) throw new Error("Failed to load dashboard");
         return res.json();
       })
-      .then((data) => setMarkers(data))
-      .catch(() => setMarkers([]));
-
-    /* Fetch reports from backend */
-    setReportsLoading(true);
-    fetch("http://localhost:8000/reports")
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to load reports");
-        return res.json();
-      })
-      .then((data: LegacyReportData[]) => {
-        const withIds = data.map((r, i) => ({ ...r, id: `api-${i}` }));
-        setReports(withIds);
+      .then((data: DashboardResponse) => {
+        const kanban = data.kanban ?? { pending: [], in_progress: [], completed: [] };
+        setMapPoints(data.map_points ?? []);
+        setKanbanBoard(buildKanbanBoard(kanban));
         setReportsKey((k) => k + 1);
       })
       .catch((err) => {
-        setReportsError(err.message);
-        setReports([]);
+        setError(err.message ?? "Failed to load dashboard");
+        setMapPoints([]);
+        setKanbanBoard({ pending: [], in_progress: [], completed: [] });
       })
-      .finally(() => setReportsLoading(false));
+      .finally(() => setLoading(false));
   }, [useMock]);
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="flex min-h-screen flex-col">
       {/* Header */}
-      <header className="flex items-center justify-between border-b border-border px-6 py-4">
+      <header className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
         <div className="flex items-center gap-3">
           <Eye className="h-5 w-5 text-accent" />
           <span className="font-mono text-sm uppercase tracking-widest text-muted-foreground">
@@ -479,59 +535,100 @@ const DashboardSection = ({ onLogout }: DashboardSectionProps) => {
         </button>
       </header>
 
-      <main className="flex flex-1 overflow-hidden">
+      <main className="flex min-h-0 flex-1 flex-row overflow-hidden" style={{ minHeight: 0 }}>
         {/* Map Panel — full height, left side */}
-        <div className="relative w-1/2 min-w-[300px]">
+        <div className="relative min-h-[300px] w-1/2 min-w-[300px] flex-1">
           <MapContainer
             center={[17.385, 78.4867]}
             zoom={12}
-            className="h-full w-full"
+            className="h-full min-h-[300px] w-full"
             style={{ background: "hsl(220, 25%, 8%)" }}
           >
             <TileLayer
               attribution='&copy; <a href="https://carto.com/">CARTO</a>'
               url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
             />
-            {markers.map((m, i) => (
-              <Marker
-                key={i}
-                position={[m.latitude, m.longitude]}
-                icon={createIcon(PRIORITY_COLORS[m.priority] || PRIORITY_COLORS.low)}
-              >
-                <Popup>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 140 }}>
-                    <span
-                      style={{
-                        fontFamily: "JetBrains Mono, monospace",
-                        fontSize: 12,
-                        textTransform: "uppercase",
-                        color: PRIORITY_COLORS[m.priority],
-                        fontWeight: 600,
-                      }}
-                    >
-                      {m.priority} priority
-                    </span>
-                    <a
-                      href={`https://www.google.com/maps/dir/?api=1&destination=${m.latitude},${m.longitude}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                        fontFamily: "JetBrains Mono, monospace",
-                        fontSize: 11,
-                        color: "#3b82f6",
-                        textDecoration: "none",
-                        fontWeight: 500,
-                      }}
-                    >
-                      📍 Get Directions
-                    </a>
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
+            {useMock
+              ? MOCK_MARKERS.map((m) => (
+                  <Marker
+                    key={m.id}
+                    position={[m.latitude, m.longitude]}
+                    icon={createIcon(PRIORITY_COLORS[m.flag] ?? PRIORITY_COLORS.low)}
+                  >
+                    <Popup>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 140 }}>
+                        <span
+                          style={{
+                            fontFamily: "JetBrains Mono, monospace",
+                            fontSize: 12,
+                            textTransform: "uppercase",
+                            color: PRIORITY_COLORS[m.flag] ?? PRIORITY_COLORS.low,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {m.flag}
+                        </span>
+                        <a
+                          href={`https://www.google.com/maps/dir/?api=1&destination=${m.latitude},${m.longitude}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                            fontFamily: "JetBrains Mono, monospace",
+                            fontSize: 11,
+                            color: "#3b82f6",
+                            textDecoration: "none",
+                            fontWeight: 500,
+                          }}
+                        >
+                          📍 Get Directions
+                        </a>
+                      </div>
+                    </Popup>
+                  </Marker>
+                ))
+              : mapPoints.map((m) => (
+                  <Marker
+                    key={m.id}
+                    position={[m.latitude, m.longitude]}
+                    icon={createIcon(PRIORITY_COLORS[m.flag] ?? PRIORITY_COLORS.low)}
+                  >
+                    <Popup>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 140 }}>
+                        <span
+                          style={{
+                            fontFamily: "JetBrains Mono, monospace",
+                            fontSize: 12,
+                            textTransform: "uppercase",
+                            color: PRIORITY_COLORS[m.flag] ?? PRIORITY_COLORS.low,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {m.flag}
+                        </span>
+                        <a
+                          href={`https://www.google.com/maps/dir/?api=1&destination=${m.latitude},${m.longitude}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                            fontFamily: "JetBrains Mono, monospace",
+                            fontSize: 11,
+                            color: "#3b82f6",
+                            textDecoration: "none",
+                            fontWeight: 500,
+                          }}
+                        >
+                          📍 Get Directions
+                        </a>
+                      </div>
+                    </Popup>
+                  </Marker>
+                ))}
           </MapContainer>
 
           {/* Legend */}
@@ -559,20 +656,21 @@ const DashboardSection = ({ onLogout }: DashboardSectionProps) => {
             </h2>
           </div>
 
-          {reportsLoading ? (
+          {!useMock && loading ? (
             <div className="flex items-center justify-center py-10">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
-          ) : reportsError ? (
+          ) : !useMock && error ? (
             <p className="py-4 text-center font-mono text-xs text-primary">
-              {reportsError}
-            </p>
-          ) : reports.length === 0 ? (
-            <p className="py-4 text-center font-mono text-xs text-muted-foreground">
-              No reports available
+              {error}
             </p>
           ) : (
-            <ReportKanban key={reportsKey} reports={reports} />
+            <ReportKanban
+              key={reportsKey}
+              initialBoard={kanbanBoard}
+              readOnly
+              className="min-h-[320px]"
+            />
           )}
         </div>
       </main>
